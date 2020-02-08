@@ -107,14 +107,23 @@ class Router {
 		});
 
 		if (route !== undefined) {
-			let route_params = {};
+			let handler_str = route.handler.toString();
+			handler_str = handler_str.slice(handler_str.indexOf('(')+1, handler_str.indexOf(')'));
+
+			let params = handler_str.split(',').slice(1).map(param => param.trim());
+
+			if (params.length !== final_route_args.length) {
+				throw new Error(`mismatched route parameters: Found ${params.length} parameters, expected ${final_route_args.length}`);
+			}
 
 			final_route_args.forEach((arg, index) => {
-				route_params[arg] = final_args[arg] = final_args[index];
+				if(arg !== params[index]) {
+					throw new Error(`mismatched route parameter: Found '${params[index]}', expected '${arg}'`);
+				}
 			});
 
 			try {
-				route.handler(req, route_params);
+				route.handler(req, ...final_args);
 			} catch (err) {
 				req.respond({ status: 500, body: err.message });
 			}
@@ -130,13 +139,11 @@ router.add_route("/", (req) => {
 	req.respond({ body: "Home\n" });
 });
 
-router.add_route("/<name>/hello/<greeting>", (req, args: { name: string, greeting: string }) => {
-	let { name, greeting } = args;
+router.add_route("/<name>/hello/<greeting>", (req, name: string, greeting: string) => {
 	req.respond({ body: `${greeting} ${name}` });
 });
 
-router.add_route("/<name>/bye/<farewell>", (req, args: { name: string, farewell: string }) => {
-	let { name, farewell } = args;
+router.add_route("/<name>/bye/<farewell>", (req, name: string, farewell: string) => {
 	req.respond({ body: `${farewell} ${name}` });
 });
 
