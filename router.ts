@@ -66,11 +66,19 @@ export class Router {
 		return arg_values;
 	}
 
-	private validate_route_args(route: WebRoute, route_args: string[]) {
+	private check_route_args(route: WebRoute, route_args: string[]): boolean {
+		let wants_request = false;
 		let handler_str = route.handler.toString();
 		handler_str = handler_str.slice(handler_str.indexOf('(')+1, handler_str.indexOf(')'));
 
 		let params = handler_str.split(',').map(param => param.trim());
+		if (params.includes('req')) {
+			wants_request = true;
+		} else {
+			wants_request = false;
+		}
+
+		params = params.length == 1 ? [] : params;
 
 		if (params.length !== route_args.length) {
 			throw new Error(`mismatched route parameters: Found ${params.length} parameters, expected ${route_args.length}`);
@@ -81,6 +89,8 @@ export class Router {
 				throw new Error(`mismatched route parameter: Found '${params[index]}', expected '${arg}'`);
 			}
 		});
+
+		return wants_request;
 	}
 
 	public add_route(url: string, handler: Function) {
@@ -90,8 +100,9 @@ export class Router {
 	public async route_request(req: ServerRequest) {
 		console.log(`Url: ${req.url}`);
 
+		// Get url and trim off last '/' unless it's the only one
 		let url = req.url;
-		if (url[url.length - 1] === '/') {
+		if (url[url.length - 1] === '/' && url.split('/').length > 2) {
 			url = url.substring(0, url.length - 1);
 		}
 
@@ -113,12 +124,16 @@ export class Router {
 		});
 
 		if (route !== undefined) {
-			this.validate_route_args(route, final_route_args);
+			let wants_request = this.check_route_args(route, final_route_args);
 
 			try {
-				let response = route.handler(...final_args);
+				if (wants_request) {
+					route.handler(req, ...final_args);
+				} else {
+					let response = route.handler(...final_args);
+					req.respond({ body: response });
+				}
 
-				req.respond({ body: response });
 			} catch (err) {
 				req.respond({ status: 500, body: err.message });
 			}
